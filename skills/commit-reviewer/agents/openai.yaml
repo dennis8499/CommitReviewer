@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit Reviewer"
+  short_description: "檢查 Commit 草稿、MR 分支條件、Issue 編號與他人異動，產生可核對 SHA 的報告"
+  default_prompt: "使用 $commit-reviewer 檢查目前 Repo 的 MR 準備狀態並產生報告。"
