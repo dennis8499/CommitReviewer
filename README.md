@@ -27,7 +27,7 @@
 
 ## 安裝
 
-需要 Python 3.10+ 與 Git，helper 不依賴額外 Python 套件或 GitLab Token。本次以 Python 3.14、Git 2.55.0.windows.5 驗證。技能來源在 `skills/commit-reviewer/`，目前交付為獨立專案，安裝時複製整個資料夾。
+需要 Python 3.10+ 與 Git，helper 不依賴額外 Python 套件或 GitLab Token。本次以 Python 3.14、Git 2.55.0.windows.5 驗證。技能來源在 `skills/commit-reviewer/`，版本為 0.1.0，可從 [GitHub Releases](https://github.com/dennis8499/CommitReviewer/releases) 下載獨立套件，或透過 WorkflowKit 安裝。
 
 在本專案根目錄開 PowerShell，安裝至個人 Codex 技能目錄：
 
@@ -71,7 +71,9 @@ python -X utf8 -B package_skill.py
 
 測試只使用 `.test-runs/` 內的隔離 Repo 與本機 bare remote，不連接外部服務。完成後清理自己建立的 Repo。Windows 沙箱若阻擋 Git 內部 sh 程序，需在允許 Git 子程序的終端執行測試。
 
-打包輸出 `dist/commit-reviewer.zip`，包含 `commit-reviewer/` 完整技能與根目錄 `INSTALL.md`。解壓後將技能資料夾放入安裝位置即可。
+打包輸出 `dist/commit-reviewer-0.1.0.zip` 與 `.zip.sha256`，ZIP 僅包含 `commit-reviewer/` 完整技能。解壓後將技能資料夾放入安裝位置即可。封裝固定檔案順序、換行及 ZIP metadata；`--tag v0.1.0` 可核對版本。
+
+推送至 `main` 會執行 Windows／Python 3.10、3.14 測試。待 CI 通過後，將 `v0.1.0` 標籤推送到相同提交；發布流程核對 main、標籤、CI 證據與資產雜湊，下載校驗後才轉為正式 Release。
 
 ## 判斷範圍
 

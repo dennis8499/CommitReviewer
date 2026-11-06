@@ -1,44 +1,54 @@
-"""Package the self-contained skill, excluding test/runtime and Python cache files."""
-
+"""Build the canonical, self-contained CommitReviewer release assets."""
+from __future__ import annotations
+import argparse
+import hashlib
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
+import re
+from zipfile import ZIP_STORED, ZipFile, ZipInfo
+
+ROOT = Path(__file__).resolve().parent
+TEXT = {".md", ".py", ".yaml", ".yml", ".json", ".txt", ".toml"}
 
 
-def build():
-    root = Path(__file__).resolve().parent
-    source = root / "skills" / "commit-reviewer"
-    output = root / "dist" / "commit-reviewer.zip"
-    output.parent.mkdir(exist_ok=True)
-    with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
-        for path in sorted(source.rglob("*")):
-            if path.is_file() and "__pycache__" not in path.parts and path.suffix not in (".pyc", ".pyo"):
-                archive.write(path, (Path("commit-reviewer") / path.relative_to(source)).as_posix())
-        archive.writestr("INSTALL.md", r"""# 安裝 Commit Reviewer
-
-需要 Python 3.10+ 與 Git。解壓後，將整個 `commit-reviewer/` 資料夾放入個人 Codex 技能目錄，或目標工作區的 `.agents/skills/`。
-
-在解壓目錄開啟 PowerShell，可安裝到預設個人技能位置：
-
-```powershell
-$destinationRoot = Join-Path $env:USERPROFILE '.codex\skills'
-$destination = Join-Path $destinationRoot 'commit-reviewer'
-if (Test-Path -LiteralPath $destination) { throw '目的地已存在，請先決定升級方式。' }
-New-Item -ItemType Directory -Force -Path $destinationRoot | Out-Null
-Copy-Item -LiteralPath '.\commit-reviewer' -Destination $destination -Recurse
-```
-
-若設定 CODEX_HOME，請改用該目錄下的 skills。安裝後下一輪對話可輸入：
-
-```text
-使用 $commit-reviewer 檢查目前 Repo 是否可以發 MR，並產生繁中報告。
-```
-
-只有精確 Fetch、本機檢查、草稿與報告；Commit／Rebase／Push／建立 MR 由開發者執行。
-操作細節見 [CLI 與人工確認](commit-reviewer/references/workflow.md)。
-""")
-    print(output)
+def build(*, tag=None, source=None, output_dir=None):
+    source = Path(source) if source is not None else ROOT / "skills/commit-reviewer"
+    output_dir = Path(output_dir) if output_dir is not None else ROOT / "dist"
+    version = (source / "VERSION").read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version):
+        raise ValueError("VERSION must be stable X.Y.Z")
+    if tag is not None and tag != "v" + version:
+        raise ValueError("tag must match VERSION")
+    if source.is_symlink() or not (source / "SKILL.md").is_file():
+        raise ValueError("invalid Skill directory")
+    entries = {}
+    for path in sorted(source.rglob("*")):
+        if path.is_symlink() or getattr(path, "is_junction", lambda: False)():
+            raise ValueError("Skill package cannot contain links")
+        if not path.is_file() or "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
+            continue
+        content = path.read_bytes()
+        if path.name == "VERSION" or path.suffix.lower() in TEXT:
+            content = content.replace(b"\r\n", b"\n")
+        entries["commit-reviewer/" + path.relative_to(source).as_posix()] = content
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output = output_dir / f"commit-reviewer-{version}.zip"
+    with ZipFile(output, "w", compression=ZIP_STORED) as archive:
+        for name, content in entries.items():
+            info = ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            info.compress_type = ZIP_STORED
+            archive.writestr(info, content)
+    checksum = hashlib.sha256(output.read_bytes()).hexdigest()
+    output.with_suffix(".zip.sha256").write_text(f"{checksum}  {output.name}\n", encoding="ascii", newline="\n")
     return output
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tag")
+    args = parser.parse_args()
+    try:
+        print(build(tag=args.tag))
+    except (ValueError, OSError) as error:
+        parser.exit(2, f"package-skill: {error}\n")
